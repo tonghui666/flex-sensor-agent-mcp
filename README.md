@@ -1,429 +1,248 @@
-# COMSOL MCP Server
+# 天津大学微电子学院柔性压力传感器综合实验 MCP
 
-MCP Server for COMSOL Multiphysics simulation automation via AI agents.
+这是面向**天津大学微电子学院柔性压力传感器综合实验**开发的 COMSOL Agent MCP 项目。项目基于 Model Context Protocol（MCP）把 COMSOL Multiphysics 的建模、求解和结果导出能力封装为可被 AI Agent 调用的工具，使实验人员可以用自然语言驱动柔性压力传感器仿真流程。
 
-English | [中文](README_CN.md)
+本项目的目标不是简单打开 COMSOL，而是让 Agent 能够理解实验任务，并自动完成典型仿真动作：分析微结构 DXF 文件、建立柔性压力传感器接触压缩模型、设置材料与边界条件、执行参数扫描、导出接触长度和压力积分等关键结果。
 
-## Star History
+## 项目定位
 
-[![GitHub stars](https://img.shields.io/github/stars/wjc9011/COMSOL_Multiphysics_MCP?style=social)](https://github.com/wjc9011/COMSOL_Multiphysics_MCP/stargazers)
+柔性压力传感器综合实验通常涉及微结构设计、弹性体材料建模、上下电极接触、压缩位移加载、接触压力分布分析等步骤。传统 COMSOL 建模需要人工完成大量重复操作，例如几何导入、选择集设置、接触对创建、网格划分、参数扫描和结果后处理。
 
-[![Star History Chart](https://starchart.cc/wjc9011/COMSOL_Multiphysics_MCP.svg)](https://starchart.cc/wjc9011/COMSOL_Multiphysics_MCP)
+本 MCP 将这些重复、容易出错的操作封装成标准工具接口，让 AI Agent 可以像调用函数一样操作 COMSOL。学生和研究人员可以把更多精力放在传感器结构设计、仿真结果理解和实验机理分析上。
 
-## Project Goal
+## MCP 是什么
 
-Build a complete COMSOL MCP Server enabling AI agents (like Claude, opencode) to perform multiphysics simulations through the MCP protocol:
+MCP（Model Context Protocol）是一种让 AI Agent 调用外部工具、数据和软件系统的协议。可以把 MCP 理解为 Agent 和专业软件之间的“标准接口层”。
 
-1. **Model Management** - Create, load, save, version control
-2. **Geometry Building** - Blocks, cylinders, spheres, boolean operations
-3. **Physics Configuration** - Heat transfer, fluid flow, electrostatics, solid mechanics
-4. **Meshing & Solving** - Auto mesh, stationary/time-dependent studies
-5. **Results Visualization** - Evaluate expressions, export plots
-6. **Knowledge Integration** - Embedded guides + PDF semantic search
+在本项目中：
 
-## Requirements
+- Agent 负责理解用户的自然语言需求。
+- MCP Server 负责把需求转换成可执行的工具调用。
+- COMSOL 后端负责真实的几何建模、物理场设置、网格划分、求解和结果计算。
 
-- **COMSOL Multiphysics** (version 5.x or 6.x)
-- **Python 3.10+** (NOT Windows Store version)
-- **Java runtime** (required by MPh/COMSOL)
+因此，用户可以说“用这个 DXF 建一个柔性压力传感器接触模型，压缩位移从 0 到 20 微米扫描”，Agent 会通过 MCP 调用对应工具完成建模与仿真。
 
-## Installation
+## Agent 的作用
 
-```bash
-# Clone repository
-git clone https://github.com/wjc9011/comsol-mcp.git
-cd comsol-mcp
+Agent 是具备工具调用能力的智能助手。它不仅能回答问题，还能根据任务目标拆解步骤、选择工具、读取结果并继续执行下一步。
 
-# Install dependencies
-python -m pip install -e .
+在柔性压力传感器实验中，Agent 可以承担以下工作：
 
-# Test server
-python -m src.server
+- 根据用户描述判断需要建立哪类 COMSOL 模型。
+- 自动读取 DXF 微结构轮廓并判断几何尺寸。
+- 根据实验参数设置材料、加载、接触和求解器。
+- 执行参数扫描并导出 CSV 结果。
+- 对接触压力、接触长度、压缩位移关系进行解释。
+- 帮助学生理解 MCP、COMSOL API、JVM 和仿真工作流之间的关系。
+
+## 核心功能
+
+本项目保留了通用 COMSOL MCP 能力，同时增加了面向柔性压力传感器综合实验的专用工具。
+
+通用能力包括：
+
+- 启动和连接 COMSOL 会话。
+- 创建、加载、保存 COMSOL 模型。
+- 创建组件、几何、材料、物理场、网格和研究。
+- 执行求解、监控求解进度、导出结果。
+- 查询模型结构、参数、数据集、解和图表。
+
+柔性压力传感器专用能力包括：
+
+| 工具名称 | 功能 |
+| --- | --- |
+| `flex_sensor_analyze_dxf` | 分析 DXF 微结构轮廓，统计线段、圆弧、边界范围，并给出单位建议。 |
+| `flex_sensor_build_contact_model` | 从 DXF 自动构建二维接触压缩模型，包括敏感层、上电极、Neo-Hookean 材料、固定边界、位移加载、接触对、网格和参数扫描。 |
+| `flex_sensor_export_contact_results` | 从已求解模型中导出接触长度、压力积分等结果，用于后续绘图和性能分析。 |
+
+## 技术架构
+
+本 MCP 的核心架构如下：
+
+```mermaid
+flowchart LR
+    A["用户自然语言需求"] --> B["AI Agent"]
+    B --> C["MCP Client"]
+    C --> D["COMSOL MCP Server"]
+    D --> E["Python 工具层"]
+    E --> F["MPh / JPype"]
+    F --> G["JVM"]
+    G --> H["COMSOL Java API"]
+    H --> I["COMSOL Multiphysics"]
+    I --> J["模型与仿真结果"]
 ```
 
-## Building PDF Knowledge Base
+其中，MPh 和 JPype 用于在 Python 中调用 COMSOL Java API。COMSOL 的 Java client 运行在 JVM 中，真正的几何、物理场和求解操作最终都会传递给 COMSOL Multiphysics 执行。
 
-```bash
-# Install additional dependencies
-pip install pymupdf chromadb sentence-transformers
+在本地适配中，本项目还支持使用 **stdio proxy + HTTP sidecar** 的方式连接 COMSOL。这样做的原因是：COMSOL Java client 如果直接放在 MCP stdio 进程中，有时会在连接阶段阻塞，导致 MCP 客户端无法正常收到响应。通过将 COMSOL 操作放在 HTTP sidecar 中，再由 stdio proxy 与 Agent 通信，可以降低 stdio 阻塞风险，使工具调用更加稳定。
 
-# Build knowledge base
-python scripts/build_knowledge_base.py
+## 柔性压力传感器仿真流程
 
-# Check status
-python scripts/build_knowledge_base.py --status
+典型实验流程如下：
+
+1. 准备微结构 DXF 文件  
+   DXF 文件描述柔性敏感层的二维轮廓，例如微金字塔、微圆顶、沟槽或其他周期结构截面。
+
+2. 分析 DXF 几何  
+   使用 `flex_sensor_analyze_dxf` 读取 DXF，获得几何边界、实体数量和推荐单位。
+
+3. 构建接触压缩模型  
+   使用 `flex_sensor_build_contact_model` 自动建立敏感层和上电极，配置材料模型、接触边界、固定约束和位移加载。
+
+4. 执行参数扫描  
+   对上电极下压位移进行扫描，例如 `0 2 4 6 8 10 12 14 16 18 20` 微米，得到不同压缩状态下的接触行为。
+
+5. 导出结果  
+   使用 `flex_sensor_export_contact_results` 导出接触长度、压力积分等数据。
+
+6. 分析传感器性能  
+   根据接触面积、压力分布和压缩位移关系，分析柔性压力传感器的灵敏度、线性范围和结构设计差异。
+
+## 环境要求
+
+建议环境：
+
+- Windows 10/11
+- Python 3.10 或更高版本
+- COMSOL Multiphysics 6.x
+- Java/JVM 环境
+- Git
+
+本实验环境中，COMSOL 6.3 安装路径为：
+
+```powershell
+D:\COMSOL63
 ```
 
+如果本机 COMSOL 安装在其他路径，需要在本地配置中修改对应的 COMSOL 路径和 Java classpath。
 
-## Usage
+## 安装方法
 
-### Option 1: With opencode
+克隆仓库：
 
-Create `opencode.json` in project root:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "comsol": {
-      "type": "local",
-      "command": ["python", "-m", "src.server"],
-      "enabled": true,
-      "environment": {
-        "HF_ENDPOINT": "https://hf-mirror.com"
-      },
-      "timeout": 30000
-    }
-  }
-}
+```powershell
+git clone https://github.com/tonghui666/flex-sensor-agent-mcp.git
+cd flex-sensor-agent-mcp
 ```
 
-### Option 2: With Claude Desktop
+创建并激活 Python 虚拟环境：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+安装依赖：
+
+```powershell
+pip install -e .
+```
+
+如果需要运行测试：
+
+```powershell
+pip install pytest
+pytest
+```
+
+## MCP 配置方式
+
+在支持 MCP 的 Agent 客户端中添加本项目的 MCP Server 配置。根据本地部署方式，可以选择直接 stdio 启动，或使用 stdio proxy 连接 HTTP sidecar。
+
+示例配置思路：
 
 ```json
 {
   "mcpServers": {
-    "comsol": {
+    "flex-sensor-comsol": {
       "command": "python",
       "args": ["-m", "src.server"],
-      "cwd": "/path/to/comsol-mcp"
+      "cwd": "C:/Users/Administrator/Desktop/comsol/COMSOL_Multiphysics_MCP"
     }
   }
 }
 ```
 
-## Code Structure
+如果使用 HTTP sidecar，应先启动 sidecar 服务，再由 stdio proxy 与 MCP 客户端通信。具体命令以本地脚本和配置文件为准。
 
-```
-comsol_mcp/
-├── opencode.json                    # MCP server config for opencode
-├── pyproject.toml                   # Python project config
-├── README.md                        # This file
-│
-├── src/
-│   ├── server.py                    # MCP Server entry point
-│   ├── tools/
-│   │   ├── session.py               # COMSOL session management (start/stop/status)
-│   │   ├── model.py                 # Model CRUD + versioning
-│   │   ├── parameters.py            # Parameter management + sweeps
-│   │   ├── geometry.py              # Geometry creation (block/cylinder/sphere)
-│   │   ├── physics.py               # Physics interfaces + boundary conditions
-│   │   ├── mesh.py                  # Mesh generation
-│   │   ├── study.py                 # Study creation + solving (sync/async)
-│   │   └── results.py               # Results evaluation + export
-│   ├── resources/
-│   │   └── model_resources.py       # MCP resources (model tree, parameters)
-│   ├── knowledge/
-│   │   ├── embedded.py              # Embedded physics guides + troubleshooting
-│   │   ├── retriever.py             # PDF vector search retriever
-│   │   └── pdf_processor.py         # PDF chunking + embedding
-│   ├── async_handler/
-│   │   └── solver.py                # Async solving with progress tracking
-│   └── utils/
-│       └── versioning.py            # Model version path management
-│
-├── scripts/
-│   └── build_knowledge_base.py      # Build PDF vector database
-│
-├── client_script/                   # Standalone modeling scripts (examples)
-│   ├── create_chip_tsv_final.py     # Example: Chip thermal model
-│   ├── create_micromixer_auto.py    # Example: Fluid flow simulation
-│   ├── create_chip_thermal*.py      # Various chip thermal variants
-│   ├── create_micromixer*.py        # Various micromixer variants
-│   ├── visualize_*.py               # Result visualization scripts
-│   ├── add_visualization.py         # Add plot groups to model
-│   └── test_*.py                    # Integration tests
-│
-├── comsol_models/                   # Saved models (structured)
-│   ├── chip_tsv_thermal/
-│   │   ├── chip_tsv_thermal_20260216_*.mph
-│   │   └── chip_tsv_thermal_latest.mph
-│   └── micromixer/
-│       └── micromixer_*.mph
-│
-└── tests/
-    └── test_basic.py                # Unit tests
+## 典型使用示例
+
+连接或启动 COMSOL：
+
+```text
+请启动 COMSOL，并连接到本地 COMSOL 6.3 环境。
 ```
 
-## Available Tools (83+ total)
+分析 DXF 微结构：
 
-### Session (4)
-
-| Tool | Description |
-|------|-------------|
-| `comsol_start` | Start local COMSOL client |
-| `comsol_connect` | Connect to remote server |
-| `comsol_disconnect` | Clear session |
-| `comsol_status` | Get session info |
-
-### Model (9)
-
-| Tool | Description |
-|------|-------------|
-| `model_load` | Load .mph file |
-| `model_create` | Create empty model |
-| `model_save` | Save to file |
-| `model_save_version` | Save with timestamp |
-| `model_list` | List loaded models |
-| `model_set_current` | Set active model |
-| `model_clone` | Clone model |
-| `model_remove` | Remove from memory |
-| `model_inspect` | Get model structure |
-
-### Parameters (5)
-
-| Tool | Description |
-|------|-------------|
-| `param_get` | Get parameter value |
-| `param_set` | Set parameter |
-| `param_list` | List all parameters |
-| `param_sweep_setup` | Setup parametric sweep |
-| `param_description` | Get/set description |
-
-### Geometry (14)
-
-| Tool | Description |
-|------|-------------|
-| `geometry_list` | List geometry sequences |
-| `geometry_create` | Create geometry sequence |
-| `geometry_add_feature` | Add generic feature |
-| `geometry_add_block` | Add rectangular block |
-| `geometry_add_cylinder` | Add cylinder |
-| `geometry_add_sphere` | Add sphere |
-| `geometry_add_rectangle` | Add 2D rectangle |
-| `geometry_add_circle` | Add 2D circle |
-| `geometry_boolean_union` | Union objects |
-| `geometry_boolean_difference` | Subtract objects |
-| `geometry_import` | Import CAD file |
-| `geometry_build` | Build geometry |
-| `geometry_list_features` | List features |
-| `geometry_get_boundaries` | Get boundary numbers |
-
-### Physics (16)
-
-| Tool | Description |
-|------|-------------|
-| `physics_list` | List physics interfaces |
-| `physics_get_available` | Available physics types |
-| `physics_add` | Add generic physics |
-| `physics_add_electrostatics` | Add Electrostatics |
-| `physics_add_solid_mechanics` | Add Solid Mechanics |
-| `physics_add_heat_transfer` | Add Heat Transfer |
-| `physics_add_laminar_flow` | Add Laminar Flow |
-| `physics_configure_boundary` | Configure boundary condition |
-| `physics_set_material` | Assign material |
-| `physics_list_features` | List physics features |
-| `physics_remove` | Remove physics |
-| `multiphysics_add` | Add coupling |
-| `physics_interactive_setup_heat` | Interactive heat BC setup |
-| `physics_setup_heat_boundaries` | Configure heat boundaries |
-| `physics_interactive_setup_flow` | Interactive flow BC setup |
-| `physics_boundary_selection` | Generic boundary setup |
-
-### Mesh (3)
-
-| Tool | Description |
-|------|-------------|
-| `mesh_list` | List mesh sequences |
-| `mesh_create` | Generate mesh |
-| `mesh_info` | Get mesh statistics |
-
-### Study & Solving (8)
-
-| Tool | Description |
-|------|-------------|
-| `study_list` | List studies |
-| `study_solve` | Solve synchronously |
-| `study_solve_async` | Solve in background |
-| `study_get_progress` | Get progress |
-| `study_cancel` | Cancel solving |
-| `study_wait` | Wait for completion |
-| `solutions_list` | List solutions |
-| `datasets_list` | List datasets |
-
-### Results (9)
-
-| Tool | Description |
-|------|-------------|
-| `results_evaluate` | Evaluate expression |
-| `results_global_evaluate` | Evaluate scalar |
-| `results_inner_values` | Get time steps |
-| `results_outer_values` | Get sweep values |
-| `results_export_data` | Export data |
-| `results_export_image` | Export plot image |
-| `results_exports_list` | List export nodes |
-| `results_plots_list` | List plot nodes |
-
-### Flexible Pressure Sensor (3)
-
-| Tool | Description |
-|------|-------------|
-| `flex_sensor_analyze_dxf` | Analyze DXF microstructure bounds, entity counts, and likely unit scale |
-| `flex_sensor_build_contact_model` | Build and optionally solve a 2D flexible pressure sensor contact model from DXF |
-| `flex_sensor_export_contact_results` | Export contact length and pressure metrics from a solved sensor sweep |
-
-### Knowledge (8)
-
-| Tool | Description |
-|------|-------------|
-| `docs_get` | Get documentation |
-| `docs_list` | List available docs |
-| `physics_get_guide` | Physics quick guide |
-| `troubleshoot` | Troubleshooting help |
-| `modeling_best_practices` | Best practices |
-| `pdf_search` | Search PDF docs |
-| `pdf_search_status` | PDF search status |
-| `pdf_list_modules` | List PDF modules |
-
-## Example Cases
-
-### Case 1: Chip Thermal Model with TSV
-
-3D thermal analysis of a silicon chip with Through-Silicon Via (TSV).
-
-**Geometry**: 60×60×5 µm chip, 5 µm diameter TSV hole, 10×10 µm heat source
-
-```python
-# Key steps:
-# 1. Create chip block and TSV cylinder
-# 2. Boolean difference (subtract TSV from chip)
-# 3. Add Silicon material (k=130 W/m·K)
-# 4. Add Heat Transfer physics
-# 5. Set heat flux on top, temperature on bottom
-# 6. Solve and evaluate temperature distribution
+```text
+请分析这个 DXF 文件的微结构尺寸，并判断适合用什么单位导入 COMSOL。
 ```
 
-**Script**: `client_script/create_chip_tsv_final.py`
+构建柔性压力传感器模型：
 
-**Run**:
-```bash
-cd /path/to/comsol-mcp
-python client_script/create_chip_tsv_final.py
+```text
+请基于该 DXF 建立二维柔性压力传感器接触压缩模型。
+上电极高度 20 微米，初始间隙 2 微米，下压位移从 0 到 20 微米扫描。
 ```
 
-**Results**: Temperature rise from ambient with heat flux of 1 MW/m²
+导出结果：
 
-### Case 2: Micromixer Fluid Flow
-
-3D laminar flow simulation in a microfluidic channel.
-
-**Geometry**: 600×100×50 µm rectangular channel
-
-```python
-# Key steps:
-# 1. Create rectangular channel block
-# 2. Add water material (ρ=1000 kg/m³, μ=0.001 Pa·s)
-# 3. Add Laminar Flow physics
-# 4. Set inlet velocity (1 mm/s), outlet pressure
-# 5. Add Transport of Diluted Species for mixing
-# 6. Solve and evaluate velocity profile
+```text
+请导出不同压缩位移下的接触长度和压力积分，保存为 CSV 文件。
 ```
 
-**Script**: `client_script/create_micromixer_auto.py`
+## 仓库结构
 
-**Run**:
-```bash
-cd /path/to/comsol-mcp
-python client_script/create_micromixer_auto.py
+```text
+.
+├── src/                         # MCP Server 与 COMSOL 工具实现
+├── tests/                       # 测试用例
+├── comsol_models/               # 本地生成的 COMSOL 模型，默认不提交
+├── README.md                    # 中文项目说明
+├── README_FLEX_SENSOR_AGENT_MCP.md
+├── GITHUB_DEPLOYMENT.md
+├── pyproject.toml
+└── .gitignore
 ```
 
-**Results**: Velocity distribution, concentration mixing profile
+## 技术要点
 
-## Model Versioning
+1. MCP 工具封装  
+   将 COMSOL 建模动作抽象为 Agent 可调用的工具，例如模型创建、几何导入、边界条件设置、参数扫描和结果导出。
 
-Models are saved with structured paths:
+2. COMSOL Java API 调用  
+   通过 Python 调用 JVM 中的 COMSOL Java API，实现对 COMSOL 的自动化控制。
 
-```
-./comsol_models/{model_name}/{model_name}_{timestamp}.mph
-./comsol_models/{model_name}/{model_name}_latest.mph
-```
+3. 柔性传感器专用建模流程  
+   将柔性压力传感器实验中的敏感层、上电极、Neo-Hookean 材料、接触对和压缩加载封装成固定工作流。
 
-Example:
-```
-./comsol_models/chip_tsv_thermal/chip_tsv_thermal_20260216_140514.mph
-./comsol_models/chip_tsv_thermal/chip_tsv_thermal_latest.mph
-```
+4. DXF 微结构解析  
+   对常见 LINE 和 ARC 轮廓进行保守解析，为后续几何导入和单位选择提供依据。
 
-## Key Technical Discoveries
+5. 参数化求解与结果导出  
+   支持位移参数扫描，并导出接触长度和压力积分等实验分析指标。
 
-### 1. mph Library API Patterns
+6. stdio proxy + HTTP sidecar 适配  
+   将容易阻塞的 COMSOL Java client 操作从 MCP stdio 主进程中隔离出来，提高 Agent 调用稳定性。
 
-```python
-# Access Java model via property (not callable)
-jm = model.java  # NOT model.java()
+## 注意事项
 
-# Create component with True flag
-comp = jm.component().create('comp1', True)
+- `.venv/`、`comsol_models/`、`knowledge_base/`、`logs/` 和大型 `.mph` 模型文件默认不提交到 Git。
+- COMSOL 求解可能占用较多 CPU 和内存，复杂接触模型建议先使用较小参数范围测试。
+- DXF 文件应尽量保持轮廓闭合、单位清晰、结构简洁。
+- 若求解不收敛，可以尝试减小位移步长、优化网格、调整接触设置或简化几何。
+- 本项目用于教学与科研实验辅助，仿真结果仍需要结合材料参数、实验标定和实际器件结构进行判断。
 
-# Create 3D geometry
-geom = comp.geom().create('geom1', 3)
+## 后续扩展方向
 
-# Create physics with geometry reference
-physics = comp.physics().create('spf', 'LaminarFlow', 'geom1')
+- 增加电学模型，实现压阻、电容或电流响应仿真。
+- 增加结构参数自动优化能力，例如微结构高度、周期、圆角和间距优化。
+- 支持更多 DXF 实体和复杂微结构阵列。
+- 增加自动绘图和报告生成功能。
+- 引入仿真失败诊断与自动重试策略。
+- 建立柔性压力传感器实验数据集，与仿真结果进行对比验证。
 
-# Boundary condition with selection
-bc = physics.create('inl1', 'InletBoundary')
-bc.selection().set([1, 2, 3])
-bc.set('U0', '1[mm/s]')
-```
+## 许可证
 
-### 2. Boundary Condition Property Names
-
-| Physics | Condition | Property |
-|---------|-----------|----------|
-| Heat Transfer | HeatFluxBoundary | `q0` |
-| Heat Transfer | TemperatureBoundary | `T0` |
-| Heat Transfer | ConvectiveHeatFlux | `h`, `Text` |
-| Laminar Flow | InletBoundary | `U0`, `NormalInflowVelocity` |
-| Laminar Flow | OutletBoundary | `p0` |
-
-### 3. Client Session Limitation
-
-The mph library creates a singleton COMSOL client. Only one Client can exist per Python process:
-
-```python
-# This is handled in session.py - client is kept alive and models are cleared
-client.clear()  # Clear models instead of full disconnect
-```
-
-### 4. Offline Embedding Model
-
-PDF search supports offline operation with local HuggingFace cache:
-
-```bash
-# Set mirror for China
-export HF_ENDPOINT=https://hf-mirror.com
-```
-
-## Development Status
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Basic framework + Session + Model | Done |
-| 2 | Parameters + Solving + Results | Done |
-| 3 | Geometry + Physics + Mesh | Done |
-| 4 | Embedded knowledge + Tool docs | Done |
-| 5 | PDF vector retrieval | Done |
-| 6 | Integration tests | In Progress |
-
-## Next Steps
-
-1. **Complete Phase 6** - Full integration test with proper boundary conditions
-2. **Visualization Export** - Generate PNG images from plot groups
-3. **LSP Warnings** - Fix type hints in physics.py
-4. **More Examples** - Add electrostatics, solid mechanics cases
-5. **Error Handling** - Improve error messages and recovery
-
-
-## Resources
-
-| URI | Description |
-|-----|-------------|
-| `comsol://session/info` | Session information |
-| `comsol://model/{name}/tree` | Model tree structure |
-| `comsol://model/{name}/parameters` | Model parameters |
-| `comsol://model/{name}/physics` | Physics interfaces |
-
-## License
-
-MIT
+本项目遵循仓库中的开源许可证文件。用于课程实验、科研学习和二次开发时，请同时遵守 COMSOL Multiphysics 软件许可协议。
