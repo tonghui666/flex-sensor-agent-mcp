@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# COMSOL generated outputs and large artifacts
+comsol_models/
+*.mph
+*.mphbin
+*.mph.lock
+*.java.log
+
+# Local runtime caches and logs
+logs/
+knowledge_base/
+*.log
+
+# Local documents, exports, and scratch outputs
+outputs/
+report_assets/
+*_contact_results.csv
+*_contact_results.svg
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
